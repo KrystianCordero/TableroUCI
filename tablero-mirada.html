@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Tablero de comunicación por mirada</title>
+<style>
+  :root{
+    --bg: #0d1b2a;
+    --panel: #14273d;
+    --accent: #5fb3a3;
+    --accent-soft: #2a4a5c;
+    --warm: #f2c14e;
+    --danger: #e8553f;
+    --text: #f4f6f5;
+    --text-dim: #a9bcc9;
+    --ring: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin:0; padding:0; height:100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    overflow: hidden;
+    -webkit-user-select:none; user-select:none;
+  }
+  #app { position:relative; width:100vw; height:100vh; }
+
+  /* ---------- Pantallas genéricas ---------- */
+  .screen { position:absolute; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center; padding:24px; text-align:center; }
+  .screen.active { display:flex; }
+
+  h1 { font-size: clamp(22px, 5vw, 34px); margin: 0 0 8px; }
+  p.sub { color: var(--text-dim); font-size: clamp(14px,3vw,18px); max-width: 560px; line-height:1.5; margin: 0 0 24px; }
+
+  button.big-btn {
+    background: var(--accent); color:#06231d; border:none; border-radius:16px;
+    padding: 18px 32px; font-size: clamp(16px,3.5vw,20px); font-weight:700;
+    cursor:pointer; margin: 8px;
+  }
+  button.ghost-btn {
+    background: transparent; color: var(--text); border:2px solid var(--accent-soft);
+    border-radius:14px; padding: 14px 26px; font-size: clamp(14px,3vw,17px);
+    cursor:pointer; margin:8px;
+  }
+
+  /* ---------- Calibración ---------- */
+  #calib-area { position:relative; width:100%; height:100%; }
+  .calib-dot {
+    position:absolute; width:34px; height:34px; border-radius:50%;
+    background: var(--warm); box-shadow: 0 0 0 8px rgba(242,193,78,0.2);
+    transform: translate(-50%,-50%);
+    cursor:pointer; border:none;
+  }
+  .calib-dot.done { background: var(--accent); box-shadow:0 0 0 8px rgba(95,179,163,0.2); }
+  #calib-hint {
+    position:absolute; top:16px; left:0; right:0; text-align:center;
+    color: var(--text-dim); font-size:15px; padding: 0 16px;
+  }
+  #calib-count {
+    position:absolute; bottom:20px; left:0; right:0; text-align:center; color:var(--text-dim); font-size:14px;
+  }
+
+  /* ---------- Tablero principal ---------- */
+  #board { position:absolute; inset:0; display:grid;
+    grid-template-columns: 1fr 1.6fr 1fr;
+    grid-template-rows: 1fr 1.6fr 1fr;
+    gap: 10px; padding: 10px;
+  }
+  .zone {
+    background: var(--panel); border-radius:20px; border: 3px solid transparent;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding: 10px; cursor:pointer; position:relative; overflow:hidden;
+    transition: border-color .15s, background .15s;
+  }
+  .zone .icon { font-size: clamp(28px,6vw,44px); margin-bottom:6px; }
+  .zone .label { font-size: clamp(14px,2.6vw,19px); font-weight:700; line-height:1.25; }
+  .zone.z-up    { grid-column: 2; grid-row: 1; }
+  .zone.z-down  { grid-column: 2; grid-row: 3; }
+  .zone.z-left  { grid-column: 1; grid-row: 2; }
+  .zone.z-right { grid-column: 3; grid-row: 2; }
+  .zone.z-center{ grid-column: 2; grid-row: 2; background: var(--accent-soft); }
+  .zone.filling { border-color: var(--ring); }
+  .zone .progress {
+    position:absolute; left:0; bottom:0; height:6px; background: var(--ring);
+    width:0%;
+  }
+  .zone.active-say {
+    background: var(--accent); color:#06231d;
+  }
+
+  #display-msg {
+    position:absolute; top:8px; left:8px; right:8px;
+    background: rgba(0,0,0,0.35); border-radius:14px; padding: 10px 16px;
+    font-size: clamp(16px,3.4vw,22px); font-weight:700; min-height:44px;
+    display:flex; align-items:center; justify-content:center; text-align:center;
+    z-index: 5; pointer-events:none;
+  }
+
+  #emergency-btn {
+    position:absolute; z-index: 6; top: 8px; right: 8px;
+    background: var(--danger); color:#fff; border:none; border-radius:14px;
+    padding: 10px 14px; font-weight:800; font-size:13px; cursor:pointer;
+    box-shadow: 0 0 0 0 rgba(232,85,63,0.6); animation: pulse 2.4s infinite;
+    display:none;
+  }
+  #emergency-btn.show { display:block; }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(232,85,63,0.55); }
+    70% { box-shadow: 0 0 0 14px rgba(232,85,63,0); }
+    100% { box-shadow: 0 0 0 0 rgba(232,85,63,0); }
+  }
+
+  #topbar {
+    position:absolute; top:8px; left:8px; z-index:6; display:flex; gap:6px;
+  }
+  .icon-btn {
+    background: rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15);
+    color: var(--text); border-radius:10px; padding:8px 10px; font-size:12px; cursor:pointer;
+  }
+
+  #status-pill {
+    position:absolute; bottom:8px; left:8px; z-index:6;
+    background: rgba(0,0,0,0.35); border-radius:10px; padding:6px 10px; font-size:12px;
+    color: var(--text-dim);
+  }
+  #status-pill.ok { color: var(--accent); }
+  #status-pill.warn { color: var(--warm); }
+
+  #debug-panel {
+    position:absolute; z-index:9; top:8px; left:50%; transform:translateX(-50%);
+    background: rgba(0,0,0,0.7); border:1px solid rgba(255,255,255,0.2);
+    border-radius:10px; padding:8px 14px; font-size:12px; color:#dfeee9;
+    font-family: monospace; text-align:left; max-width: 92vw; line-height:1.6;
+  }
+  #debug-panel div span.ok{color:#5fb3a3;font-weight:700;}
+  #debug-panel div span.bad{color:#e8553f;font-weight:700;}
+  #debug-panel div span.pending{color:#f2c14e;font-weight:700;}
+
+  video#webgazerVideoFeed, canvas#webgazerVideoCanvas, canvas#webgazerFaceOverlay,
+  canvas#webgazerFaceFeedbackBox, div#webgazerGazeDot {
+    z-index: 3 !important;
+  }
+  #videoWrap { position:absolute; bottom:8px; right:8px; width:110px; height:82px;
+    border-radius:10px; overflow:hidden; border:2px solid var(--accent-soft); z-index:6; opacity:0.85; }
+
+  label.field { display:flex; align-items:center; gap:10px; margin:10px 0; color:var(--text-dim); font-size:14px; }
+  input[type=range] { width:180px; }
+
+  #history-panel {
+    position:absolute; z-index:6; top:56px; left:8px; right:8px;
+    max-height: 90px; overflow-y:auto; font-size:12px; color:var(--text-dim);
+    background: rgba(0,0,0,0.25); border-radius:10px; padding:6px 10px; display:none;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- PANTALLA INICIO -->
+  <div class="screen active" id="screen-start">
+    <h1>Tablero de comunicación por mirada</h1>
+    <p class="sub">
+      Coloca la pantalla frente a la persona, a la altura de sus ojos, con buena luz sobre su cara (evita luz muy fuerte detrás de ella).
+      La cámara debe ver bien ambos ojos. Este tablero se puede usar con la mirada (arriba / abajo / izquierda / derecha)
+      o, si prefieres, tocando las zonas directamente como acompañante.
+    </p>
+    <button class="big-btn" id="btn-start-calib">Calibrar seguimiento ocular</button>
+    <button class="ghost-btn" id="btn-skip-calib">Usar solo con toques (sin cámara)</button>
+    <p class="sub" style="margin-top:18px; font-size:13px;">
+      Nota: el seguimiento por webcam tiene precisión limitada. Si en algún momento no responde bien, siempre puedes tocar las zonas manualmente — el tablero funciona igual.
+    </p>
+    <div id="debug-panel">
+      <div>Librería webgazer: <span id="dbg-lib" class="pending">verificando…</span></div>
+      <div>Permiso de cámara: <span id="dbg-cam" class="pending">sin solicitar</span></div>
+      <div>Modelo de rostro: <span id="dbg-model" class="pending">sin iniciar</span></div>
+      <div>Última coordenada de mirada: <span id="dbg-coord" class="pending">—</span></div>
+      <div>Último error: <span id="dbg-error" class="pending">ninguno</span></div>
+    </div>
+  </div>
+
+  <!-- PANTALLA CALIBRACIÓN -->
+  <div class="screen" id="screen-calib">
+    <div id="calib-area">
+      <div id="calib-hint">Pide a la persona que mire fijamente cada punto amarillo. Toca cada punto 5 veces mientras ella lo mira.</div>
+      <div id="calib-count"></div>
+    </div>
+  </div>
+
+  <!-- PANTALLA TABLERO -->
+  <div class="screen" id="screen-board">
+    <div id="board">
+      <div class="zone z-up" data-dir="up"><div class="icon">⬆️</div><div class="label">—</div><div class="progress"></div></div>
+      <div class="zone z-left" data-dir="left"><div class="icon">⬅️</div><div class="label">—</div><div class="progress"></div></div>
+      <div class="zone z-center" data-dir="center"><div class="icon">●</div><div class="label">—</div><div class="progress"></div></div>
+      <div class="zone z-right" data-dir="right"><div class="icon">➡️</div><div class="label">—</div><div class="progress"></div></div>
+      <div class="zone z-down" data-dir="down"><div class="icon">⬇️</div><div class="label">—</div><div class="progress"></div></div>
+    </div>
+    <div id="display-msg">Mira una zona para comenzar</div>
+    <div id="topbar">
+      <button class="icon-btn" id="btn-recalibrate">🎯 Recalibrar</button>
+      <button class="icon-btn" id="btn-settings">⚙️ Ajustes</button>
+      <button class="icon-btn" id="btn-history">🕘 Historial</button>
+    </div>
+    <div id="history-panel"></div>
+    <button id="emergency-btn">🔴 URGENTE — Llamar a enfermera</button>
+    <div id="status-pill">Iniciando…</div>
+    <div id="videoWrap"></div>
+    <div id="board-debug" style="position:absolute; bottom:8px; left:180px; z-index:6; font-family:monospace; font-size:12px; color:var(--text-dim); background:rgba(0,0,0,0.35); border-radius:10px; padding:6px 10px;">
+      coords: <span id="dbg-coord-board">—</span>
+    </div>
+  </div>
+
+  <!-- PANTALLA AJUSTES -->
+  <div class="screen" id="screen-settings">
+    <h1>Ajustes</h1>
+    <label class="field">Tiempo de espera para seleccionar (segundos)
+      <input type="range" id="dwell-range" min="0.8" max="3.5" step="0.1" value="1.6">
+      <span id="dwell-value">1.6s</span>
+    </label>
+    <label class="field">
+      <input type="checkbox" id="toggle-video" checked> Mostrar vista de cámara
+    </label>
+    <label class="field">
+      <input type="checkbox" id="toggle-sound" checked> Leer en voz alta las selecciones
+    </label>
+    <button class="big-btn" id="btn-settings-back">Volver al tablero</button>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/webgazer@3/dist/webgazer.min.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  /* ===================== CONTENIDO DEL TABLERO ===================== */
+  const TREE = {
+    label: "Inicio",
+    children: {
+      up:    { label:"Necesito algo", icon:"🤲", children:{
+                 up:    { label:"Agua", icon:"💧", say:"Necesito agua." },
+                 down:  { label:"Ajustar postura / almohada", icon:"🛏️", say:"Necesito que me ajusten la postura o la almohada." },
+                 left:  { label:"Tengo frío / calor", icon:"🌡️", say:"Tengo frío o calor, por favor ajusten la temperatura." },
+                 right: { label:"Otra cosa", icon:"❓", say:"Necesito algo, pero es otra cosa." },
+               }},
+      down:  { label:"Sí / No / Cómo estoy", icon:"💬", children:{
+                 up:    { label:"Sí", icon:"✅", say:"Sí." },
+                 down:  { label:"No", icon:"⛔", say:"No." },
+                 left:  { label:"Tengo miedo o ansiedad", icon:"😟", say:"Tengo miedo o me siento ansioso." },
+                 right: { label:"Estoy tranquilo/a", icon:"🙂", say:"Estoy tranquilo o tranquila." },
+               }},
+      left:  { label:"Personas", icon:"🧑‍🤝‍🧑", children:{
+                 up:    { label:"Llama a la enfermera", icon:"🔔", say:"Por favor, llamen a la enfermera." },
+                 down:  { label:"Quiero que te quedes", icon:"🤝", say:"Quiero que te quedes conmigo." },
+                 left:  { label:"Quiero ver a mi familia", icon:"❤️", say:"Quiero ver a mi familia." },
+                 right: { label:"Quiero estar en silencio", icon:"🤫", say:"Necesito estar en silencio un momento." },
+               }},
+      right: { label:"Cuerpo / Dolor", icon:"🩺", children:{
+                 up:    { label:"Me duele", icon:"⚡", say:"Me duele." },
+                 down:  { label:"Náuseas", icon:"🤢", say:"Tengo náuseas." },
+                 left:  { label:"Falta de aire", icon:"🫁", say:"Siento que me falta el aire." },
+                 right: { label:"Necesito el baño / cuña", icon:"🚽", say:"Necesito ir al baño o que me ayuden con la cuña." },
+               }},
+    }
+  };
+
+  let current = TREE;
+  let history = [];
+
+  /* ===================== ELEMENTOS ===================== */
+  const zones = document.querySelectorAll('.zone');
+  const displayMsg = document.getElementById('display-msg');
+  const statusPill = document.getElementById('status-pill');
+  const emergencyBtn = document.getElementById('emergency-btn');
+  const historyPanel = document.getElementById('history-panel');
+
+  let dwellMs = 1600;
+  let soundOn = true;
+  let videoOn = true;
+
+  /* ===================== PANEL DE DIAGNÓSTICO ===================== */
+  const dbg = {
+    lib: document.getElementById('dbg-lib'),
+    cam: document.getElementById('dbg-cam'),
+    model: document.getElementById('dbg-model'),
+    coord: document.getElementById('dbg-coord'),
+    error: document.getElementById('dbg-error'),
+  };
+  function setDbg(el, text, cls){
+    el.textContent = text;
+    el.className = cls;
+  }
+  window.addEventListener('load', ()=>{
+    setTimeout(()=>{
+      if(window.webgazer){
+        setDbg(dbg.lib, 'cargada correctamente', 'ok');
+      } else {
+        setDbg(dbg.lib, 'NO CARGÓ (bloqueada por red/CSP)', 'bad');
+      }
+    }, 1200);
+  });
+  navigator.mediaDevices?.getUserMedia ? null : setDbg(dbg.cam, 'este navegador no soporta cámara', 'bad');
+
+  function speak(text){
+    if(!soundOn) return;
+    try{
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'es-ES';
+      u.rate = 0.95;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(u);
+    }catch(e){}
+  }
+
+  function renderZones(){
+    const dirs = ['up','down','left','right'];
+    dirs.forEach(d=>{
+      const z = document.querySelector('.zone[data-dir="'+d+'"]');
+      const node = current.children ? current.children[d] : null;
+      const iconEl = z.querySelector('.icon');
+      const labelEl = z.querySelector('.label');
+      if(node){
+        iconEl.textContent = node.icon || '•';
+        labelEl.textContent = node.label;
+        z.style.visibility = 'visible';
+      } else {
+        iconEl.textContent = '';
+        labelEl.textContent = '';
+        z.style.visibility = 'hidden';
+      }
+    });
+    const centerZ = document.querySelector('.zone[data-dir="center"]');
+    if(current === TREE){
+      centerZ.querySelector('.icon').textContent = '🔁';
+      centerZ.querySelector('.label').textContent = 'Repetir último';
+    } else {
+      centerZ.querySelector('.icon').textContent = '↩️';
+      centerZ.querySelector('.label').textContent = 'Atrás / Inicio';
+    }
+  }
+
+  function pushHistory(text){
+    const time = new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+    history.unshift(time + ' — ' + text);
+    history = history.slice(0,20);
+    historyPanel.innerHTML = history.map(h=>'<div>'+h+'</div>').join('');
+  }
+
+  function selectZone(dir){
+    const node = current.children ? current.children[dir] : null;
+    if(dir === 'center'){
+      if(current === TREE){
+        if(history[0]) speak(history[0].split(' — ')[1]);
+      } else {
+        current = TREE;
+        renderZones();
+      }
+      return;
+    }
+    if(!node){ return; }
+    if(node.say){
+      displayMsg.textContent = node.say;
+      speak(node.say);
+      pushHistory(node.say);
+      flashZone(dir);
+      setTimeout(()=>{ current = TREE; renderZones(); }, 2600);
+    } else if(node.children){
+      current = node;
+      renderZones();
+    }
+  }
+
+  function flashZone(dir){
+    const z = document.querySelector('.zone[data-dir="'+dir+'"]');
+    z.classList.add('active-say');
+    setTimeout(()=>z.classList.remove('active-say'), 500);
+  }
+
+  /* clic/touch manual: siempre disponible como respaldo */
+  zones.forEach(z=>{
+    z.addEventListener('click', ()=> selectZone(z.getAttribute('data-dir')));
+  });
+
+  document.getElementById('emergency-btn').addEventListener('click', ()=>{
+    displayMsg.textContent = '🔴 Necesito ayuda urgente';
+    speak('Necesito ayuda urgente, por favor vengan.');
+    pushHistory('🔴 URGENTE: ayuda solicitada');
+  });
+
+  /* ===================== NAVEGACIÓN DE PANTALLAS ===================== */
+  function showScreen(id){
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+
+  document.getElementById('btn-skip-calib').addEventListener('click', ()=>{
+    renderZones();
+    statusPill.textContent = 'Modo solo-toque (sin cámara)';
+    statusPill.className = 'warn';
+    emergencyBtn.classList.add('show');
+    showScreen('screen-board');
+  });
+
+  document.getElementById('btn-recalibrate').addEventListener('click', startCalibration);
+  document.getElementById('btn-settings').addEventListener('click', ()=> showScreen('screen-settings'));
+  document.getElementById('btn-settings-back').addEventListener('click', ()=> showScreen('screen-board'));
+  document.getElementById('btn-history').addEventListener('click', ()=>{
+    historyPanel.style.display = historyPanel.style.display === 'block' ? 'none' : 'block';
+  });
+
+  document.getElementById('dwell-range').addEventListener('input', (e)=>{
+    dwellMs = Math.round(parseFloat(e.target.value)*1000);
+    document.getElementById('dwell-value').textContent = e.target.value + 's';
+  });
+  document.getElementById('toggle-sound').addEventListener('change', (e)=>{ soundOn = e.target.checked; });
+  document.getElementById('toggle-video').addEventListener('change', (e)=>{
+    videoOn = e.target.checked;
+    const vw = document.getElementById('videoWrap');
+    vw.style.display = videoOn ? 'block' : 'none';
+    if(window.webgazer) webgazer.showVideo(videoOn).showFaceOverlay(false).showFaceFeedbackBox(false).showPredictionPoints(false);
+  });
+
+  /* ===================== CALIBRACIÓN ===================== */
+  let calibClicks = {};
+  const CALIB_POINTS = [
+    [10,10],[50,10],[90,10],
+    [10,50],[50,50],[90,50],
+    [10,90],[50,90],[90,90]
+  ];
+  const CLICKS_NEEDED = 5;
+
+  function startCalibration(){
+    showScreen('screen-calib');
+    const area = document.getElementById('calib-area');
+    area.querySelectorAll('.calib-dot').forEach(d=>d.remove());
+    calibClicks = {};
+    CALIB_POINTS.forEach((p,i)=>{
+      const dot = document.createElement('button');
+      dot.className = 'calib-dot';
+      dot.style.left = p[0]+'%';
+      dot.style.top = p[1]+'%';
+      dot.dataset.idx = i;
+      calibClicks[i] = 0;
+      dot.addEventListener('click', ()=>{
+        calibClicks[i]++;
+        if(window.webgazer && webgazer.recordScreenPosition){
+          const rect = dot.getBoundingClientRect();
+          webgazer.recordScreenPosition(rect.left+rect.width/2, rect.top+rect.height/2, 'click');
+        }
+        if(calibClicks[i] >= CLICKS_NEEDED){
+          dot.classList.add('done');
+        }
+        updateCalibCount();
+      });
+      area.appendChild(dot);
+    });
+    updateCalibCount();
+  }
+
+  function updateCalibCount(){
+    const done = Object.values(calibClicks).filter(c=>c>=CLICKS_NEEDED).length;
+    const countEl = document.getElementById('calib-count');
+    countEl.textContent = 'Puntos calibrados: ' + done + ' / ' + CALIB_POINTS.length +
+      (done >= CALIB_POINTS.length ? '  —  ¡Listo! Toca en cualquier parte para continuar.' : '');
+    if(done >= CALIB_POINTS.length && !countEl.dataset.finishBound){
+      countEl.dataset.finishBound = '1';
+      document.getElementById('calib-area').addEventListener('click', finishCalibration, {once:true});
+    }
+  }
+
+  function finishCalibration(){
+    renderZones();
+    statusPill.textContent = 'Seguimiento ocular activo';
+    statusPill.className = 'ok';
+    emergencyBtn.classList.add('show');
+    showScreen('screen-board');
+  }
+
+  document.getElementById('btn-start-calib').addEventListener('click', async ()=>{
+    statusPill.textContent = 'Activando cámara…';
+    setDbg(dbg.cam, 'solicitando permiso…', 'pending');
+    setDbg(dbg.model, 'cargando modelo de rostro (puede tardar 5-20s)…', 'pending');
+    try{
+      if(!window.webgazer){
+        setDbg(dbg.lib, 'NO CARGÓ (bloqueada por red/CSP)', 'bad');
+        throw new Error('La librería webgazer no se cargó. Revisa tu conexión o si algo está bloqueando scripts externos.');
+      }
+      setDbg(dbg.lib, 'cargada correctamente', 'ok');
+
+      // Pedimos permiso de cámara explícitamente primero, para dar un mensaje claro si se deniega
+      try{
+        const stream = await navigator.mediaDevices.getUserMedia({video:true});
+        stream.getTracks().forEach(t=>t.stop());
+        setDbg(dbg.cam, 'permiso concedido', 'ok');
+      }catch(camErr){
+        setDbg(dbg.cam, 'DENEGADO o sin cámara disponible', 'bad');
+        throw new Error('No se concedió permiso de cámara, o no hay cámara disponible: ' + camErr.message);
+      }
+
+      await webgazer.setRegression('ridge')
+        .setTracker('TFFacemesh')
+        .begin();
+
+      setDbg(dbg.model, 'listo', 'ok');
+      webgazer.showVideo(true).showFaceOverlay(false).showFaceFeedbackBox(false).showPredictionPoints(true);
+      const vw = document.getElementById('videoWrap');
+      setTimeout(()=>{
+        const vid = document.getElementById('webgazerVideoFeed');
+        if(vid) vw.appendChild(vid);
+      }, 300);
+      attachGazeListener();
+      startCalibration();
+    }catch(err){
+      statusPill.textContent = 'Cámara no disponible — usando solo toques';
+      statusPill.className = 'warn';
+      setDbg(dbg.error, String(err.message || err), 'bad');
+      alert('No se pudo activar el seguimiento ocular:\n\n' + (err.message || err) + '\n\nEl tablero seguirá funcionando tocando las zonas directamente. Revisa el panel de diagnóstico en la pantalla de inicio para más detalles.');
+      renderZones();
+      emergencyBtn.classList.add('show');
+      showScreen('screen-board');
+    }
+  });
+
+  /* ===================== SEGUIMIENTO DE MIRADA -> ZONAS ===================== */
+  let dwellState = { dir:null, start:0 };
+  let rafId = null;
+
+  function zoneFromPoint(x,y){
+    const w = window.innerWidth, h = window.innerHeight;
+    const cx = w/2, cy = h/2;
+    const dx = x - cx, dy = y - cy;
+    const edgeMargin = Math.min(w,h) * 0.16;
+    if(Math.abs(dx) < edgeMargin && Math.abs(dy) < edgeMargin) return 'center';
+    if(Math.abs(dx) > Math.abs(dy)){
+      return dx < 0 ? 'left' : 'right';
+    } else {
+      return dy < 0 ? 'up' : 'down';
+    }
+  }
+
+  function attachGazeListener(){
+    let lastX = null, lastY = null;
+    let coordCount = 0;
+    webgazer.setGazeListener((data) => {
+      if(!data) return;
+      lastX = data.x; lastY = data.y;
+      coordCount++;
+      if(coordCount % 10 === 0){
+        setDbg(dbg.coord, Math.round(data.x)+', '+Math.round(data.y), 'ok');
+        const boardCoord = document.getElementById('dbg-coord-board');
+        if(boardCoord) boardCoord.textContent = Math.round(data.x)+', '+Math.round(data.y);
+      }
+    });
+    function loop(){
+      if(lastX !== null && document.getElementById('screen-board').classList.contains('active')){
+        const dir = zoneFromPoint(lastX, lastY);
+        handleDwell(dir);
+      }
+      rafId = requestAnimationFrame(loop);
+    }
+    loop();
+  }
+
+  function handleDwell(dir){
+    const now = performance.now();
+    if(dwellState.dir !== dir){
+      dwellState = { dir, start: now };
+    }
+    zones.forEach(z=>z.classList.remove('filling'));
+    const elapsed = now - dwellState.start;
+    const z = document.querySelector('.zone[data-dir="'+dir+'"]');
+    if(z && z.style.visibility !== 'hidden'){
+      z.classList.add('filling');
+      const pct = Math.min(100, (elapsed/dwellMs)*100);
+      z.querySelector('.progress').style.width = pct + '%';
+      if(elapsed >= dwellMs){
+        selectZone(dir);
+        dwellState = { dir:null, start:0 };
+        zones.forEach(zz=>zz.querySelector('.progress').style.width='0%');
+      }
+    }
+  }
+
+  renderZones();
+})();
+</script>
+</body>
+</html>
