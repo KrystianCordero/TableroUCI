@@ -26,14 +26,10 @@
     -webkit-user-select:none; user-select:none;
   }
   #app { position:relative; width:100vw; height:100vh; }
-
-  /* ---------- Pantallas genéricas ---------- */
   .screen { position:absolute; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center; padding:24px; text-align:center; }
   .screen.active { display:flex; }
-
   h1 { font-size: clamp(22px, 5vw, 34px); margin: 0 0 8px; }
   p.sub { color: var(--text-dim); font-size: clamp(14px,3vw,18px); max-width: 560px; line-height:1.5; margin: 0 0 24px; }
-
   button.big-btn {
     background: var(--accent); color:#06231d; border:none; border-radius:16px;
     padding: 18px 32px; font-size: clamp(16px,3.5vw,20px); font-weight:700;
@@ -44,8 +40,6 @@
     border-radius:14px; padding: 14px 26px; font-size: clamp(14px,3vw,17px);
     cursor:pointer; margin:8px;
   }
-
-  /* ---------- Calibración ---------- */
   #calib-area { position:relative; width:100%; height:100%; }
   .calib-dot {
     position:absolute; width:34px; height:34px; border-radius:50%;
@@ -61,8 +55,6 @@
   #calib-count {
     position:absolute; bottom:20px; left:0; right:0; text-align:center; color:var(--text-dim); font-size:14px;
   }
-
-  /* ---------- Tablero principal ---------- */
   #board { position:absolute; inset:0; display:grid;
     grid-template-columns: 1fr 1.6fr 1fr;
     grid-template-rows: 1fr 1.6fr 1fr;
@@ -89,7 +81,6 @@
   .zone.active-say {
     background: var(--accent); color:#06231d;
   }
-
   #display-msg {
     position:absolute; top:8px; left:8px; right:8px;
     background: rgba(0,0,0,0.35); border-radius:14px; padding: 10px 16px;
@@ -97,7 +88,6 @@
     display:flex; align-items:center; justify-content:center; text-align:center;
     z-index: 5; pointer-events:none;
   }
-
   #emergency-btn {
     position:absolute; z-index: 6; top: 8px; right: 8px;
     background: var(--danger); color:#fff; border:none; border-radius:14px;
@@ -111,7 +101,6 @@
     70% { box-shadow: 0 0 0 14px rgba(232,85,63,0); }
     100% { box-shadow: 0 0 0 0 rgba(232,85,63,0); }
   }
-
   #topbar {
     position:absolute; top:8px; left:8px; z-index:6; display:flex; gap:6px;
   }
@@ -119,7 +108,6 @@
     background: rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15);
     color: var(--text); border-radius:10px; padding:8px 10px; font-size:12px; cursor:pointer;
   }
-
   #status-pill {
     position:absolute; bottom:8px; left:8px; z-index:6;
     background: rgba(0,0,0,0.35); border-radius:10px; padding:6px 10px; font-size:12px;
@@ -127,7 +115,6 @@
   }
   #status-pill.ok { color: var(--accent); }
   #status-pill.warn { color: var(--warm); }
-
   #debug-panel {
     position:absolute; z-index:9; top:8px; left:50%; transform:translateX(-50%);
     background: rgba(0,0,0,0.7); border:1px solid rgba(255,255,255,0.2);
@@ -137,17 +124,14 @@
   #debug-panel div span.ok{color:#5fb3a3;font-weight:700;}
   #debug-panel div span.bad{color:#e8553f;font-weight:700;}
   #debug-panel div span.pending{color:#f2c14e;font-weight:700;}
-
   video#webgazerVideoFeed, canvas#webgazerVideoCanvas, canvas#webgazerFaceOverlay,
   canvas#webgazerFaceFeedbackBox, div#webgazerGazeDot {
     z-index: 3 !important;
   }
   #videoWrap { position:absolute; bottom:8px; right:8px; width:110px; height:82px;
     border-radius:10px; overflow:hidden; border:2px solid var(--accent-soft); z-index:6; opacity:0.85; }
-
   label.field { display:flex; align-items:center; gap:10px; margin:10px 0; color:var(--text-dim); font-size:14px; }
   input[type=range] { width:180px; }
-
   #history-panel {
     position:absolute; z-index:6; top:56px; left:8px; right:8px;
     max-height: 90px; overflow-y:auto; font-size:12px; color:var(--text-dim);
@@ -158,7 +142,6 @@
 <body>
 <div id="app">
 
-  <!-- PANTALLA INICIO -->
   <div class="screen active" id="screen-start">
     <h1>Tablero de comunicación por mirada</h1>
     <p class="sub">
@@ -180,7 +163,6 @@
     </div>
   </div>
 
-  <!-- PANTALLA CALIBRACIÓN -->
   <div class="screen" id="screen-calib">
     <div id="calib-area">
       <div id="calib-hint">Pide a la persona que mire fijamente cada punto amarillo. Toca cada punto 5 veces mientras ella lo mira.</div>
@@ -188,7 +170,6 @@
     </div>
   </div>
 
-  <!-- PANTALLA TABLERO -->
   <div class="screen" id="screen-board">
     <div id="board">
       <div class="zone z-up" data-dir="up"><div class="icon">⬆️</div><div class="label">—</div><div class="progress"></div></div>
@@ -212,7 +193,6 @@
     </div>
   </div>
 
-  <!-- PANTALLA AJUSTES -->
   <div class="screen" id="screen-settings">
     <h1>Ajustes</h1>
     <label class="field">Tiempo de espera para seleccionar (segundos)
@@ -235,7 +215,6 @@
 (function(){
   "use strict";
 
-  /* ===================== CONTENIDO DEL TABLERO ===================== */
   const TREE = {
     label: "Inicio",
     children: {
@@ -269,7 +248,6 @@
   let current = TREE;
   let history = [];
 
-  /* ===================== ELEMENTOS ===================== */
   const zones = document.querySelectorAll('.zone');
   const displayMsg = document.getElementById('display-msg');
   const statusPill = document.getElementById('status-pill');
@@ -280,7 +258,6 @@
   let soundOn = true;
   let videoOn = true;
 
-  /* ===================== PANEL DE DIAGNÓSTICO ===================== */
   const dbg = {
     lib: document.getElementById('dbg-lib'),
     cam: document.getElementById('dbg-cam'),
@@ -378,7 +355,6 @@
     setTimeout(()=>z.classList.remove('active-say'), 500);
   }
 
-  /* clic/touch manual: siempre disponible como respaldo */
   zones.forEach(z=>{
     z.addEventListener('click', ()=> selectZone(z.getAttribute('data-dir')));
   });
@@ -389,7 +365,6 @@
     pushHistory('🔴 URGENTE: ayuda solicitada');
   });
 
-  /* ===================== NAVEGACIÓN DE PANTALLAS ===================== */
   function showScreen(id){
     document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
     document.getElementById(id).classList.add('active');
@@ -422,7 +397,6 @@
     if(window.webgazer) webgazer.showVideo(videoOn).showFaceOverlay(false).showFaceFeedbackBox(false).showPredictionPoints(false);
   });
 
-  /* ===================== CALIBRACIÓN ===================== */
   let calibClicks = {};
   const CALIB_POINTS = [
     [10,10],[50,10],[90,10],
@@ -489,7 +463,6 @@
       }
       setDbg(dbg.lib, 'cargada correctamente', 'ok');
 
-      // Pedimos permiso de cámara explícitamente primero, para dar un mensaje claro si se deniega
       try{
         const stream = await navigator.mediaDevices.getUserMedia({video:true});
         stream.getTracks().forEach(t=>t.stop());
@@ -499,11 +472,20 @@
         throw new Error('No se concedió permiso de cámara, o no hay cámara disponible: ' + camErr.message);
       }
 
-      await webgazer.setRegression('ridge')
-        .setTracker('TFFacemesh')
-        .begin();
+      let usedTracker = 'clmtrackr';
+      try{
+        await webgazer.setRegression('ridge')
+          .setTracker('clmtrackr')
+          .begin();
+      }catch(trackerErr){
+        usedTracker = 'TFFacemesh';
+        setDbg(dbg.model, 'clmtrackr falló, probando TFFacemesh…', 'pending');
+        await webgazer.setRegression('ridge')
+          .setTracker('TFFacemesh')
+          .begin();
+      }
 
-      setDbg(dbg.model, 'listo', 'ok');
+      setDbg(dbg.model, 'listo (' + usedTracker + ')', 'ok');
       webgazer.showVideo(true).showFaceOverlay(false).showFaceFeedbackBox(false).showPredictionPoints(true);
       const vw = document.getElementById('videoWrap');
       setTimeout(()=>{
@@ -523,7 +505,6 @@
     }
   });
 
-  /* ===================== SEGUIMIENTO DE MIRADA -> ZONAS ===================== */
   let dwellState = { dir:null, start:0 };
   let rafId = null;
 
